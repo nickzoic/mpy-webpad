@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+<head>
+<title>MicroPython WebPAD</title>
+<body>
+
+<input id="addr" value="ws://10.107.1.132:8266/"/>
+<input id="pass" value="buzzconf"/>
+<button id="connect">Connect</button>
+<span id="status"/>
+
+<style>
+  pre.out { color: darkgreen; }
+  pre.err { color: darkred; }
+</style>
+
+<script type="text/javascript">
+(function() { 
+  var ws;
+  var pads = [];
+
+  function connect() {
+    ws = new WebSocket(window.addr.value);
+    ws.binaryType = 'arraybuffer';
+    ws.onopen = function() {
+      ws.onmessage = function(ev) {
+        if (ev.data == 'Password: ') {
+          ws.send(window.pass.value + "\r"); 
+        } else {
+          console.log(ev.data);
+        }
+      }
+    }
+  }  
+
+  function clear() {
+    var outs = document.getElementsByTagName('pre');
+    for (var i=0; i<outs.length; i++) {
+      outs[i].innerText = "";
+    }
+  }
+
+  function execute() {
+    clear();
+    var status = 0;
+    var num = 0;
+    var pads = document.getElementsByTagName('textarea');
+    var outs = document.getElementsByTagName('pre');
+
+    console.log('executing');
+    ws.onmessage = function (ev) {
+      for (var i=0; i<ev.data.length; i++) {
+        var c = ev.data[i];
+        if (status == 0 && c == 'O') { status = 1 }
+        if (status == 1 && c == 'K') { status = 2 }
+        else if (status == 2 && c == '\x04') { status = 3 }
+        else if (status == 2 && c != '\r') { outs[num*2].innerText += c }
+        else if (status == 3 && c == '\x04') { status = 4 }
+        else if (status == 3 && c != '\r') { outs[num*2+1].innerText += c }
+        else if (status == 4 && num < pads.length) { status = 0; num++ };
+      }
+    }
+
+    ws.send('\x01_g=globals().copy();_g.pop("_g", None);');
+    for (var i=0; i<pads.length; i++) {
+      var code = 'exec("' + pads[i].value.replace(/"/g, '\\"').replace(/[\n\r]+/g, '\\n') + '",_g)\x04';
+      console.log(code);
+      ws.send(code);
+    }
+  }
+
+  function newpad(value, insertBefore) {
+      var div = document.createElement('div');
+      div.className = "pad";
+      var pad = document.createElement('textarea');
+      div.appendChild(pad);
+      var out = document.createElement('pre');
+      out.className = "out";
+      div.appendChild(out);
+      var err = document.createElement('pre');
+      err.className = "err";
+      div.appendChild(err);
+      document.body.insertBefore(div, insertBefore);
+      pad.focus();
+
+      pad.value = value || '';
+      pad.style.width = "100%";
+      pad.style.overflow_y = "hidden";
+      pad.onkeypress = function(ev) {
+          if (ev.code == 'Enter') {
+              var x = pad.value.split(/\n\n\n/);
+              if (x.length > 1) {
+                  console.log(x);
+                  pad.value = x[0].replace(/\n+$/m, '');
+                  var adiv = newpad(x[1].replace(/^\s*\n+/m, ''), div.nextSibling);
+                  execute();
+              }
+              pad.style.height = "10px";
+              pad.style.height = pad.scrollHeight + 10 + "px";
+          }
+      }
+      pad.onchange = function () {
+        if (pad.value.match(/^\s*$/) && document.getElementsByTagName('textarea').length > 1) {
+          pad.remove(); out.remove(); err.remove();
+        }
+        execute();
+      }
+      
+      return div;
+  }
+
+  window.onload = function() {
+    newpad();
+    if (window.addr.value) connect();
+    window.addr.onchange = connect;
+  }
+
+})();
+
+
+</script>
+</html>
