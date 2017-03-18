@@ -112,11 +112,20 @@
     }
 
     ws.send('\x01_g=globals().copy();_g.pop("_g", None);');
-    for (var i=0; i<pads.length; i++) {
-      var code = 'exec("' + pads[i].value.replace(/"/g, '\\"').replace(/[\n\r]+/g, '\\n') + '",_g)\x04';
-      console.log(code);
-      ws.send(code);
+
+    var pad_num = 0;
+    function sendpads() {
+      var code = pads[pad_num].value.replace('"""','\\"\\"\\"');
+      var wrap = 'exec("""' + code + '\n""", _g)\x04';
+      function sendcode() {
+          ws.send(wrap.substr(0, 20));
+          wrap = wrap.substr(20);
+          if (wrap) setTimeout(sendcode, 50);
+          else { pad_num++; if (pad_num < pads.length) setTimeout(sendpads, 50); }
+      }
+      sendcode();
     }
+    sendpads();
   }
 
   function newpad(value, insertBefore) {
