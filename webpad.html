@@ -150,7 +150,8 @@
               console.log('pad.onkeyup ' + pad.value);
               var x = pad.value.split(/\n\n\n/);
               if (x.length > 1) {
-                  var adiv = newpad(x[1], div.nextSibling);
+                  var nextSib = div.nextSibiing;
+                  for (var i=1; i<x.length; i++) newpad(x[i], nextSib);
                   pad.value = x[0];
               }
               pad.style.height = "10px";
